@@ -1,3 +1,4 @@
 layout:
+  -Highlight
   -Views
-  -Dev
+  -Rooms
