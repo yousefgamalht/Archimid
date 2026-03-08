@@ -11,43 +11,48 @@ from pyrevit import forms, script
 
 doc = __revit__.ActiveUIDocument.Document
 
-# Collect all Group Types
-group_types = list(FilteredElementCollector(doc).OfClass(GroupType))
+# Collect all group instances
+instances = list(FilteredElementCollector(doc).OfClass(Group))
 
-if not group_types:
-    forms.alert("No groups found in this project.", exitscript=True)
+if not instances:
+    forms.alert("No group instances found in this project.", exitscript=True)
 
-group_names = []
+# Build dictionary of GroupType -> Category
 group_map = {}
 
-for gt in group_types:
-    try:
-        # SAFE WAY to get name
-        name_param = gt.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM)
-        name = name_param.AsString() if name_param else "Unnamed Group"
+for inst in instances:
+    gtype = inst.GroupType
+    cat_name = inst.Category.Name if inst.Category else "Unknown"
 
-        display = "{} (ID: {})".format(name, gt.Id.IntegerValue)
-        group_names.append(display)
-        group_map[display] = gt
-    except:
-        continue
+    # Safe name extraction
+    name_param = gtype.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM)
+    name = name_param.AsString() if name_param else "Unnamed"
 
-if not group_names:
+    group_type_label = "MODEL" if "Model" in cat_name else "DETAIL"
+
+    display = "[{}] {} (ID: {})".format(
+        group_type_label,
+        name,
+        gtype.Id.IntegerValue
+    )
+
+    group_map[display] = gtype
+
+if not group_map:
     forms.alert("No valid groups found.", exitscript=True)
 
+# Multi-select
 selected = forms.SelectFromList.show(
-    sorted(group_names),
-    title="Select Group to Explode & Delete",
-    multiselect=False
+    sorted(group_map.keys()),
+    title="Select Groups to Explode & Delete",
+    multiselect=True
 )
 
 if not selected:
     script.exit()
 
-group_type = group_map[selected]
-
 confirm = forms.alert(
-    "Explode ALL instances and delete this group type?",
+    "Explode ALL instances and delete selected group types?",
     yes=True,
     no=True
 )
@@ -55,19 +60,24 @@ confirm = forms.alert(
 if not confirm:
     script.exit()
 
-t = Transaction(doc, "Explode & Delete Group")
+t = Transaction(doc, "Explode & Delete Groups")
 t.Start()
 
-# Explode instances
-instances = FilteredElementCollector(doc).OfClass(Group)
+try:
+    selected_types = [group_map[s] for s in selected]
 
-for inst in instances:
-    if inst.GroupType.Id == group_type.Id:
-        inst.Ungroup()
+    # Explode instances
+    for inst in instances:
+        if inst.GroupType in selected_types:
+            inst.Ungroup()
 
-# Delete type
-doc.Delete(group_type.Id)
+    # Delete group types
+    for gt in selected_types:
+        doc.Delete(gt.Id)
 
-t.Commit()
+    t.Commit()
+    forms.alert("Selected groups deleted successfully.")
 
-forms.alert("Group deleted successfully.")
+except Exception as e:
+    t.RollBack()
+    forms.alert("Error occurred:\n{}".format(e))
