@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
-__title__ = "CAD Finder Hybrid"
+# Button Data
+__title__ = "CAD Finder (Modal)"
 __doc__ = """
-Hybrid CAD Finder: Modeless main window, modal execution for selection.
+Modal CAD Finder: Select CAD files, highlight & open view.
 Author: Yousef Gamal
 """
 
 from Autodesk.Revit.DB import *
-from pyrevit import revit, forms, script
+from pyrevit import revit, forms
 import clr
 clr.AddReference("System")
 from System.Collections.Generic import List
@@ -18,7 +19,7 @@ doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
 
 # -------------------------------
-# Modeless main window
+# Modal Window
 # -------------------------------
 class CadFinder(Window):
     def __init__(self, cad_dict):
@@ -42,12 +43,12 @@ class CadFinder(Window):
         self.select_btn = Button()
         self.select_btn.Content = "Select CAD"
         self.select_btn.Margin = Thickness(0, 10, 0, 0)
-        self.select_btn.Click += self.on_select_click
+        self.select_btn.Click += self.select_cad
         panel.Children.Add(self.select_btn)
 
         self.Content = panel
 
-    def on_select_click(self, sender, args):
+    def select_cad(self, sender, args):
         selected = self.listbox.SelectedItem
         if not selected:
             forms.alert("Please select a CAD file first.")
@@ -55,11 +56,6 @@ class CadFinder(Window):
 
         cad = self.cad_dict[selected]
 
-        # Execute selection inside a modal context
-        script.execute_in_revit_context(self.execute_selection_modal, cad)
-
-    def execute_selection_modal(self, cad):
-        """Modal execution inside Revit thread for safe highlight & view switch"""
         try:
             # Highlight element
             ids = List[ElementId]()
@@ -73,8 +69,8 @@ class CadFinder(Window):
                 if view:
                     uidoc.ActiveView = view
 
-        except Exception as e:
-            forms.alert("Failed to select CAD: {}".format(e))
+        except Exception as error:
+            forms.alert("Operation failed: {}".format(error))
 
 
 # -------------------------------
@@ -104,9 +100,9 @@ try:
     if not cad_dict:
         forms.alert("No CAD files found in this project", exitscript=True)
 
-    # Launch modeless main window
+    # ---- Launch Modal Window ----
     win = CadFinder(cad_dict)
-    win.Show()
+    win.ShowDialog()  # Modal window guarantees selection & view switch
 
 except Exception as e:
     forms.alert("Script Error: {}".format(e))
