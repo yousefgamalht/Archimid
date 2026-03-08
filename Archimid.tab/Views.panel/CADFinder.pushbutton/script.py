@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Button Data
 __title__ = "CAD Finder Hybrid"
 __doc__ = """
-Hybrid CAD Finder: Modeless main window, modal selection execution.
+Hybrid CAD Finder: Modeless main window, modal execution for selection.
 Author: Yousef Gamal
 """
 
@@ -19,7 +18,7 @@ doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
 
 # -------------------------------
-# Modeless Window
+# Modeless main window
 # -------------------------------
 class CadFinder(Window):
     def __init__(self, cad_dict):
@@ -56,17 +55,15 @@ class CadFinder(Window):
 
         cad = self.cad_dict[selected]
 
-        # Open modal window to execute selection safely inside Revit thread
-        forms.alert("Executing selection...", exitscript=False)
-        script.execute_in_revit_context(self.select_cad, cad)
+        # Execute selection inside a modal context
+        script.execute_in_revit_context(self.execute_selection_modal, cad)
 
-    def select_cad(self, cad):
-        """Runs inside Revit thread; highlights and opens view."""
+    def execute_selection_modal(self, cad):
+        """Modal execution inside Revit thread for safe highlight & view switch"""
         try:
+            # Highlight element
             ids = List[ElementId]()
             ids.Add(cad.Id)
-
-            # Show element (highlight & reveal)
             uidoc.ShowElements(ids)
             uidoc.Selection.SetElementIds(ids)
 
@@ -76,8 +73,8 @@ class CadFinder(Window):
                 if view:
                     uidoc.ActiveView = view
 
-        except Exception as error:
-            forms.alert("Operation failed: {}".format(error))
+        except Exception as e:
+            forms.alert("Failed to select CAD: {}".format(e))
 
 
 # -------------------------------
@@ -100,7 +97,6 @@ try:
             display_name = "{} | {} | {} | ID: {}".format(
                 name, cad_type, view_specific, cad.Id
             )
-
             cad_dict[display_name] = cad
         except:
             continue
