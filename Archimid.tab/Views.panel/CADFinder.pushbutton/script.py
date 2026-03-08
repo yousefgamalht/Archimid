@@ -15,6 +15,7 @@ clr.AddReference("System")
 from System.Collections.Generic import List
 from System.Windows import Window, Thickness
 from System.Windows.Controls import ListBox, Button, StackPanel
+from System.Windows import RoutedEventHandler
 
 # Variables
 doc = __revit__.ActiveUIDocument.Document
@@ -48,7 +49,7 @@ class CadFinder(Window):
         self.select_btn = Button()
         self.select_btn.Content = "Select CAD"
         self.select_btn.Margin = Thickness(0, 10, 0, 0)
-        self.select_btn.Click += self.select_cad
+        self.select_btn.Click += self.select_cad  # just attach directly
         panel.Children.Add(self.select_btn)
 
         self.Content = panel
@@ -72,6 +73,7 @@ class CadFinder(Window):
 
         except Exception as error:
             forms.alert("Operation failed: {}".format(error))
+
 
 # -------------------------------
 # Main
@@ -103,10 +105,9 @@ try:
     if not cad_dict:
         forms.alert("No CAD files found in this project", exitscript=True)
 
-    # Launch Modeless Window
+    # ---- Launch Modeless Window (Working in Revit) ----
     win = CadFinder(cad_dict)
-    from System.Windows.Threading import Dispatcher
-    win.Dispatcher.InvokeAsync(lambda: win.Show())
+    win.Show()  # Just show it directly, no Dispatcher needed
 
 except Exception as e:
     forms.alert("Script Error: {}".format(e))
