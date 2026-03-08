@@ -9,7 +9,7 @@ Author: Yousef Gamal
 
 # Imports
 from Autodesk.Revit.DB import *
-from pyrevit import revit, forms
+from pyrevit import revit, forms, script
 import clr
 clr.AddReference("System")
 from System.Collections.Generic import List
@@ -48,28 +48,33 @@ class CadFinder(Window):
         self.select_btn = Button()
         self.select_btn.Content = "Select CAD"
         self.select_btn.Margin = Thickness(0, 10, 0, 0)
-        self.select_btn.Click += self.select_cad
+        # Call select_cad inside Revit thread
+        self.select_btn.Click += self.on_select_click
         panel.Children.Add(self.select_btn)
 
         self.Content = panel
 
-    def select_cad(self, sender, args):
+    def on_select_click(self, sender, args):
         selected = self.listbox.SelectedItem
         if not selected:
             forms.alert("Please select a CAD file first.")
             return
-
         cad = self.cad_dict[selected]
 
+        # Execute selection inside Revit thread
+        script.execute_in_revit_context(self.select_cad, cad)
+
+    def select_cad(self, cad):
+        """This runs inside Revit UI thread."""
         try:
             ids = List[ElementId]()
             ids.Add(cad.Id)
 
-            # Highlight and reveal element in Revit view
+            # Show element (highlight & reveal)
             uidoc.ShowElements(ids)
             uidoc.Selection.SetElementIds(ids)
 
-            # Switch view if CAD is view-specific
+            # Switch view if view-specific
             if cad.ViewSpecific and cad.OwnerViewId != ElementId.InvalidElementId:
                 view = doc.GetElement(cad.OwnerViewId)
                 if view:
@@ -77,6 +82,7 @@ class CadFinder(Window):
 
         except Exception as error:
             forms.alert("Operation failed: {}".format(error))
+
 
 # -------------------------------
 # Main
@@ -110,7 +116,7 @@ try:
 
     # ---- Launch Modeless Window ----
     win = CadFinder(cad_dict)
-    win.Show()  # Modeless, works inside Revit
+    win.Show()  # Modeless works now
 
 except Exception as e:
     forms.alert("Script Error: {}".format(e))
