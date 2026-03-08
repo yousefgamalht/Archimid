@@ -1,83 +1,120 @@
 # -*- coding: utf-8 -*-
 __title__ = "Clear Groups"
 __doc__ = """
-Explode selected Model/Detail Groups 
+Explode Selected Model/Detail Groups 
 and Delete them from Project Browser.
 Author: Yousef Gamal
 """
 
-from Autodesk.Revit.DB import *
-from pyrevit import forms, script
+from pyrevit import forms, revit
+from Autodesk.Revit.DB import (
+    FilteredElementCollector,
+    BuiltInCategory,
+    BuiltInParameter,
+    Transaction
+)
 
-doc = __revit__.ActiveUIDocument.Document
+doc = revit.doc
 
-# Collect all group instances
-instances = list(FilteredElementCollector(doc).OfClass(Group))
 
-if not instances:
-    forms.alert("No group instances found in this project.", exitscript=True)
+# ----------------------------
+# Collect Model Group Types
+# ----------------------------
+model_groups = list(
+    FilteredElementCollector(doc)
+    .OfCategory(BuiltInCategory.OST_IOSModelGroups)
+    .WhereElementIsElementType()
+)
 
-# Build dictionary of GroupType -> Category
+# ----------------------------
+# Collect Detail Group Types
+# ----------------------------
+detail_groups = list(
+    FilteredElementCollector(doc)
+    .OfCategory(BuiltInCategory.OST_IOSDetailGroups)
+    .WhereElementIsElementType()
+)
+
+if not model_groups and not detail_groups:
+    forms.alert("No groups found in project.", exitscript=True)
+
+
+# ----------------------------
+# Prepare Display List
+# ----------------------------
+display_list = []
 group_map = {}
 
-for inst in instances:
-    gtype = inst.GroupType
-    cat_name = inst.Category.Name if inst.Category else "Unknown"
 
-    # Safe name extraction
-    name_param = gtype.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM)
-    name = name_param.AsString() if name_param else "Unnamed"
+def get_group_name(group_type):
+    try:
+        param = group_type.get_Parameter(
+            BuiltInParameter.SYMBOL_NAME_PARAM
+        )
+        if param:
+            return param.AsString()
+    except:
+        pass
+    return "Unnamed Group"
 
-    group_type_label = "MODEL" if "Model" in cat_name else "DETAIL"
 
-    display = "[{}] {} (ID: {})".format(
-        group_type_label,
-        name,
-        gtype.Id.IntegerValue
-    )
+for gt in model_groups:
+    name = get_group_name(gt)
+    display = "Model | {}".format(name)
+    display_list.append(display)
+    group_map[display] = gt
 
-    group_map[display] = gtype
+for gt in detail_groups:
+    name = get_group_name(gt)
+    display = "Detail | {}".format(name)
+    display_list.append(display)
+    group_map[display] = gt
 
-if not group_map:
-    forms.alert("No valid groups found.", exitscript=True)
 
-# Multi-select
+# ----------------------------
+# Show Selection Form
+# ----------------------------
 selected = forms.SelectFromList.show(
-    sorted(group_map.keys()),
-    title="Select Groups to Explode & Delete",
-    multiselect=True
+    sorted(display_list),
+    multiselect=True,
+    title="Select Groups to Delete",
+    width=500
 )
 
 if not selected:
-    script.exit()
+    forms.alert("No groups selected.", exitscript=True)
 
-confirm = forms.alert(
-    "Explode ALL instances and delete selected group types?",
-    yes=True,
-    no=True
-)
 
-if not confirm:
-    script.exit()
-
-t = Transaction(doc, "Explode & Delete Groups")
+# ----------------------------
+# Transaction
+# ----------------------------
+t = Transaction(doc, "Explode and Delete Groups")
 t.Start()
 
 try:
-    selected_types = [group_map[s] for s in selected]
+    for item in selected:
 
-    # Explode instances
-    for inst in instances:
-        if inst.GroupType in selected_types:
-            inst.Ungroup()
+        group_type = group_map[item]
 
-    # Delete group types
-    for gt in selected_types:
-        doc.Delete(gt.Id)
+        # Get all instances of this group type
+        instances = list(group_type.Groups)
+
+        # Ungroup all instances
+        for inst in instances:
+            try:
+                inst.UngroupMembers()
+            except:
+                pass
+
+        # Delete Group Type
+        try:
+            doc.Delete(group_type.Id)
+        except:
+            pass
 
     t.Commit()
     forms.alert("Selected groups deleted successfully.")
 
 except Exception as e:
     t.RollBack()
-    forms.alert("Error occurred:\n{}".format(e))
+    forms.alert("Error:\n{}".format(str(e)))
