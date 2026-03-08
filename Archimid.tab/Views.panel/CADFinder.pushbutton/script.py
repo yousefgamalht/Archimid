@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 
 # Button Data
-__title__ = "CAD Finder"
+__title__ = "CAD Finder Hybrid"
 __doc__ = """
-Select CAD Files (Linked/Imported) and highlight.
+Hybrid CAD Finder: Modeless main window, modal selection execution.
 Author: Yousef Gamal
 """
 
-# Imports
 from Autodesk.Revit.DB import *
 from pyrevit import revit, forms, script
 import clr
@@ -16,19 +15,15 @@ from System.Collections.Generic import List
 from System.Windows import Window, Thickness
 from System.Windows.Controls import ListBox, Button, StackPanel
 
-# Variables
 doc = __revit__.ActiveUIDocument.Document
 uidoc = __revit__.ActiveUIDocument
 
 # -------------------------------
 # Modeless Window
 # -------------------------------
-
 class CadFinder(Window):
-
     def __init__(self, cad_dict):
         self.cad_dict = cad_dict
-
         self.Title = "CAD Finder"
         self.Width = 400
         self.Height = 550
@@ -48,7 +43,6 @@ class CadFinder(Window):
         self.select_btn = Button()
         self.select_btn.Content = "Select CAD"
         self.select_btn.Margin = Thickness(0, 10, 0, 0)
-        # Call select_cad inside Revit thread
         self.select_btn.Click += self.on_select_click
         panel.Children.Add(self.select_btn)
 
@@ -59,13 +53,15 @@ class CadFinder(Window):
         if not selected:
             forms.alert("Please select a CAD file first.")
             return
+
         cad = self.cad_dict[selected]
 
-        # Execute selection inside Revit thread
+        # Open modal window to execute selection safely inside Revit thread
+        forms.alert("Executing selection...", exitscript=False)
         script.execute_in_revit_context(self.select_cad, cad)
 
     def select_cad(self, cad):
-        """This runs inside Revit UI thread."""
+        """Runs inside Revit thread; highlights and opens view."""
         try:
             ids = List[ElementId]()
             ids.Add(cad.Id)
@@ -87,14 +83,12 @@ class CadFinder(Window):
 # -------------------------------
 # Main
 # -------------------------------
-
 try:
     collector = FilteredElementCollector(doc)\
         .OfClass(ImportInstance)\
         .WhereElementIsNotElementType()
 
     cad_dict = {}
-
     for cad in collector:
         try:
             cad_ID = doc.GetElement(cad.GetTypeId())
@@ -114,9 +108,9 @@ try:
     if not cad_dict:
         forms.alert("No CAD files found in this project", exitscript=True)
 
-    # ---- Launch Modeless Window ----
+    # Launch modeless main window
     win = CadFinder(cad_dict)
-    win.Show()  # Modeless works now
+    win.Show()
 
 except Exception as e:
     forms.alert("Script Error: {}".format(e))
