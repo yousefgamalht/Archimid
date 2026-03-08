@@ -62,20 +62,21 @@ class CadFinder(Window):
         cad = self.cad_dict[selected]
 
         try:
+            ids = List[ElementId]()
+            ids.Add(cad.Id)
+
+            # Highlight and reveal element in Revit view
+            uidoc.ShowElements(ids)
+            uidoc.Selection.SetElementIds(ids)
+
             # Switch view if CAD is view-specific
             if cad.ViewSpecific and cad.OwnerViewId != ElementId.InvalidElementId:
                 view = doc.GetElement(cad.OwnerViewId)
                 if view:
                     uidoc.ActiveView = view
 
-            # Select the CAD instance
-            ids = List[ElementId]()
-            ids.Add(cad.Id)
-            uidoc.Selection.SetElementIds(ids)
-
         except Exception as error:
             forms.alert("Operation failed: {}".format(error))
-
 
 # -------------------------------
 # Main
@@ -109,7 +110,7 @@ try:
 
     # ---- Launch Modeless Window ----
     win = CadFinder(cad_dict)
-    win.Show()  # Modeless, works in Revit
+    win.Show()  # Modeless, works inside Revit
 
 except Exception as e:
     forms.alert("Script Error: {}".format(e))
